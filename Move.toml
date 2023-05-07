@@ -1,7 +1,6 @@
 [package]
 name = "LiquidityLayer"
 version = "1.0.0"
-published-at = "0x4e0629fa51a62b0c1d7c7b9fc89237ec5b6f630d7798ad3f06d820afb93a995a"
 
 [dependencies.Sui]
 git = "https://github.com/MystenLabs/sui.git"
@@ -9,10 +8,9 @@ subdir = "crates/sui-framework/packages/sui-framework"
 # mainnet-1.0.0
 rev = "ae1212baf8f0837e25926d941db3d26a61c1bea2"
 
-[dependencies.Originmate]
-git = "https://github.com/Origin-Byte/originmate.git"
-# mainnet-1.0.0
-rev = "36e02283fa00451e8476a1bbc201af9a248396de"
+[dependencies.Critbit]
+git = "https://github.com/Origin-Byte/critbit.git"
+rev = "v1.0.1-mainnet"
 
 [dependencies.Permissions]
 git = "https://github.com/Origin-Byte/nft-protocol.git"
@@ -33,4 +31,4 @@ subdir = "contracts/kiosk"
 rev = "2a435a0194a3b62988f38de519c212c224162be2"
 
 [addresses]
-liquidity_layer = "0x4e0629fa51a62b0c1d7c7b9fc89237ec5b6f630d7798ad3f06d820afb93a995a"
+liquidity_layer = "0x0"
