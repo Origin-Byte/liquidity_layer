@@ -595,13 +595,12 @@ module liquidity_layer::orderbook {
         ctx: &mut TxContext,
     ): TradeInfo {
         let is_matched_with_price = create_bid(
-            book,
-            buyer_kiosk,
-            max_price,
-            wallet,
-            ctx,
+            book, buyer_kiosk, max_price, wallet, ctx,
         );
-        assert!(option::is_some(&is_matched_with_price), EMarketOrderNotFilled);
+        assert!(
+            option::is_some(&is_matched_with_price),
+            EMarketOrderNotFilled,
+        );
         option::destroy_some(is_matched_with_price)
     }
 
@@ -609,7 +608,7 @@ module liquidity_layer::orderbook {
 
     /// Cancel a bid owned by the sender at given price. If there are two bids
     /// with the same price, the one created later is cancelled.
-    public fun cancel_bid<T: key + store, FT>(
+    public entry fun cancel_bid<T: key + store, FT>(
         book: &mut Orderbook<T, FT>,
         bid_price_level: u64,
         wallet: &mut Coin<FT>,
@@ -626,7 +625,7 @@ module liquidity_layer::orderbook {
     //
     // This API might be improved in future as we use a different data
     // structure for the orderbook.
-    public fun cancel_ask<T: key + store, FT>(
+    public entry fun cancel_ask<T: key + store, FT>(
         book: &mut Orderbook<T, FT>,
         seller_kiosk: &mut Kiosk,
         nft_price_level: u64,
@@ -697,7 +696,12 @@ module liquidity_layer::orderbook {
             beneficiary, commission_ft,
         );
         create_ask_<T, FT>(
-            book, seller_kiosk, requested_tokens, option::some(commission), nft_id, ctx
+            book,
+            seller_kiosk,
+            requested_tokens,
+            option::some(commission),
+            nft_id,
+            ctx,
         )
     }
 
@@ -723,7 +727,12 @@ module liquidity_layer::orderbook {
             commission_ft,
         );
         create_ask_<T, FT>(
-            book, seller_kiosk, requested_tokens, option::some(commission), nft_id, ctx
+            book,
+            seller_kiosk,
+            requested_tokens,
+            option::some(commission),
+            nft_id,
+            ctx,
         )
     }
 
@@ -754,7 +763,10 @@ module liquidity_layer::orderbook {
             nft_id,
             ctx,
         );
-        assert!(option::is_some(&is_matched_with_price), EMarketOrderNotFilled);
+        assert!(
+            option::is_some(&is_matched_with_price),
+            EMarketOrderNotFilled,
+        );
         option::destroy_some(is_matched_with_price)
     }
 
@@ -765,7 +777,7 @@ module liquidity_layer::orderbook {
     /// Firstly, we always emit `AskRemovedEvent` for the old ask.
     /// Then either `AskCreatedEvent` or `TradeFilledEvent`.
     /// Depends on whether the ask is filled immediately or not.
-    public fun edit_ask<T: key + store, FT>(
+    public entry fun edit_ask<T: key + store, FT>(
         book: &mut Orderbook<T, FT>,
         seller_kiosk: &mut Kiosk,
         old_price: u64,
@@ -775,12 +787,14 @@ module liquidity_layer::orderbook {
     ) {
         assert!(!book.protected_actions.create_ask, EActionNotPublic);
 
-        let commission = cancel_ask_(book, seller_kiosk, old_price, nft_id, ctx);
+        let commission = cancel_ask_(
+            book, seller_kiosk, old_price, nft_id, ctx,
+        );
         create_ask_(book, seller_kiosk, new_price, commission, nft_id, ctx);
     }
 
     /// Cancels the old bid and creates a new one with new price.
-    public fun edit_bid<T: key + store, FT>(
+    public entry fun edit_bid<T: key + store, FT>(
         book: &mut Orderbook<T, FT>,
         buyer_kiosk: &mut Kiosk,
         old_price: u64,
@@ -875,13 +889,16 @@ module liquidity_layer::orderbook {
         trade_id: ID,
         seller_kiosk: &mut Kiosk,
         buyer_kiosk: &mut Kiosk,
-        ctx: &mut TxContext
+        ctx: &mut TxContext,
     ): Option<TransferRequest<T>> {
         let t = trade(book, trade_id);
-        let kiosks_match = &t.seller_kiosk == &object::id(seller_kiosk) && &t.buyer_kiosk == &object::id(buyer_kiosk);
+        let kiosks_match = &t.seller_kiosk == &object::id(seller_kiosk)
+            && &t.buyer_kiosk == &object::id(buyer_kiosk);
 
         if (kiosks_match) {
-            option::some(finish_trade(book, trade_id, seller_kiosk, buyer_kiosk, ctx))
+            option::some(
+                finish_trade(book, trade_id, seller_kiosk, buyer_kiosk, ctx),
+            )
         } else {
             option::none()
         }
@@ -1006,28 +1023,22 @@ module liquidity_layer::orderbook {
         ask.owner
     }
 
-    public fun protected_actions<T: key + store, FT>(
-        book: &Orderbook<T, FT>,
-    ): &WitnessProtectedActions {
-        &book.protected_actions
+    public fun is_create_ask_protected<T: key + store, FT>(
+        orderbook: &Orderbook<T, FT>,
+    ): bool {
+        orderbook.protected_actions.create_ask
     }
 
-    public fun is_create_ask_protected(
-        protected_actions: &WitnessProtectedActions
+    public fun is_create_bid_protected<T: key + store, FT>(
+        orderbook: &Orderbook<T, FT>,
     ): bool {
-        protected_actions.create_ask
+        orderbook.protected_actions.create_bid
     }
 
-    public fun is_create_bid_protected(
-        protected_actions: &WitnessProtectedActions
+    public fun is_buy_nft_protected<T: key + store, FT>(
+        orderbook: &Orderbook<T, FT>,
     ): bool {
-        protected_actions.create_bid
-    }
-
-    public fun is_buy_nft_protected(
-        protected_actions: &WitnessProtectedActions
-    ): bool {
-        protected_actions.buy_nft
+        orderbook.protected_actions.buy_nft
     }
 
     public fun trade_id(trade: &TradeInfo): ID {
