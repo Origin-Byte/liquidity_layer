@@ -100,18 +100,12 @@ module liquidity_layer::test_orderbook {
             &transfer_policy, ctx(&mut scenario),
         );
 
-        transfer::public_share_object(transfer_policy);
-
-        test_scenario::next_tx(&mut scenario, CREATOR);
-        let transfer_policy = test_scenario::take_shared<TransferPolicy<Foo>>(&mut scenario);
-
         // When this is the case, anyone can come in a create an orderbook
         orderbook::create_for_external<Foo, SUI>(
-            &transfer_policy,
-            ctx(&mut scenario),
+            &transfer_policy, ctx(&mut scenario),
         );
 
-        test_scenario::return_shared(transfer_policy);
+        transfer::public_share_object(transfer_policy);
         transfer::public_transfer(policy_cap, CREATOR);
         transfer::public_transfer(publisher, CREATOR);
         test_scenario::end(scenario);
@@ -126,17 +120,12 @@ module liquidity_layer::test_orderbook {
         let publisher = package::test_claim(Witness {}, ctx(&mut scenario));
         let (transfer_policy, policy_cap) = transfer_request::init_policy<Foo>(&publisher, ctx(&mut scenario));
 
-        transfer::public_share_object(transfer_policy);
-
-        test_scenario::next_tx(&mut scenario, CREATOR);
-        let transfer_policy = test_scenario::take_shared<TransferPolicy<Foo>>(&mut scenario);
-
         // When this is the case, anyone can come in a create an orderbook
         orderbook::create_for_external<Foo, SUI>(
             &transfer_policy, ctx(&mut scenario),
         );
 
-        test_scenario::return_shared(transfer_policy);
+        transfer::public_share_object(transfer_policy);
         transfer::public_transfer(policy_cap, CREATOR);
         transfer::public_transfer(publisher, CREATOR);
         test_scenario::end(scenario);
@@ -156,13 +145,15 @@ module liquidity_layer::test_orderbook {
         let (buyer_kiosk, _) = ob_kiosk::new_for_address(BUYER, ctx(&mut scenario));
         let (seller_kiosk, _) = ob_kiosk::new_for_address(SELLER, ctx(&mut scenario));
 
-        // 4. Add NFT to Seller Kiosk
+        // 3. Add NFT to Seller Kiosk
         let nft = Foo { id: object::new(ctx(&mut scenario)) };
         let nft_id = object::id(&nft);
         ob_kiosk::deposit(&mut seller_kiosk, nft, ctx(&mut scenario));
 
-        // 5. Create ask order for NFT
+        // 4. Create ask order for NFT
+        test_scenario::next_tx(&mut scenario, SELLER);
         let book = test_scenario::take_shared<Orderbook<Foo, SUI>>(&mut scenario);
+
         orderbook::create_ask(
             &mut book,
             &mut seller_kiosk,
@@ -171,7 +162,9 @@ module liquidity_layer::test_orderbook {
             ctx(&mut scenario),
         );
 
-        // 6. Create bid for NFT
+        // 5. Create bid for NFT
+        test_scenario::next_tx(&mut scenario, BUYER);
+
         let coin = coin::mint_for_testing<SUI>(100, ctx(&mut scenario));
 
         let trade_opt = orderbook::create_bid(
@@ -183,6 +176,9 @@ module liquidity_layer::test_orderbook {
         );
 
         let trade = option::destroy_some(trade_opt);
+
+        // 6. Finish trade
+        test_scenario::next_tx(&mut scenario, CREATOR);
 
         let request = orderbook::finish_trade(
             &mut book,
@@ -210,21 +206,23 @@ module liquidity_layer::test_orderbook {
 
         // 1. Create Collection, TransferPolicy and Orderbook
         let publisher = package::test_claim(Witness {}, ctx(&mut scenario));
-
         let (tx_policy, policy_cap) = transfer_policy::new<Foo>(&publisher, ctx(&mut scenario));
+
         orderbook::create_for_external<Foo, SUI>(&tx_policy, ctx(&mut scenario));
 
         // 2. Create Kiosks
         let (buyer_kiosk, _) = ob_kiosk::new_for_address(BUYER, ctx(&mut scenario));
         let (seller_kiosk, _) = ob_kiosk::new_for_address(SELLER, ctx(&mut scenario));
 
-        // 4. Add NFT to Seller Kiosk
+        // 3. Add NFT to Seller Kiosk
         let nft = Foo { id: object::new(ctx(&mut scenario)) };
         let nft_id = object::id(&nft);
         ob_kiosk::deposit(&mut seller_kiosk, nft, ctx(&mut scenario));
 
-        // 5. Create ask order for NFT
+        // 4. Create ask order for NFT
+        test_scenario::next_tx(&mut scenario, SELLER);
         let book = test_scenario::take_shared<Orderbook<Foo, SUI>>(&mut scenario);
+        
         orderbook::create_ask(
             &mut book,
             &mut seller_kiosk,
@@ -233,7 +231,8 @@ module liquidity_layer::test_orderbook {
             ctx(&mut scenario),
         );
 
-        // 6. Create bid for NFT
+        // 5. Create bid for NFT
+        test_scenario::next_tx(&mut scenario, BUYER);
         let coin = coin::mint_for_testing<SUI>(100_000_000, ctx(&mut scenario));
 
         let trade_opt = orderbook::create_bid(
@@ -245,6 +244,9 @@ module liquidity_layer::test_orderbook {
         );
 
         let trade = option::destroy_some(trade_opt);
+
+        // 6. Finish trade
+        test_scenario::next_tx(&mut scenario, CREATOR);
 
         let request = orderbook::finish_trade(
             &mut book,
@@ -272,13 +274,16 @@ module liquidity_layer::test_orderbook {
         let scenario = test_scenario::begin(CREATOR);
 
         // 1. Create Collection, TransferPolicy and Orderbook
-        
         let publisher = package::test_claim(Witness {}, ctx(&mut scenario));
         let (tx_policy, policy_cap) = transfer_policy::new<Foo>(&publisher, ctx(&mut scenario));
+
         orderbook::create_for_external<Foo, SUI>(&tx_policy, ctx(&mut scenario));
 
         // 2. Create Kiosks
+        test_scenario::next_tx(&mut scenario, BUYER);
         let (buyer_kiosk, buyer_cap) = kiosk::new(ctx(&mut scenario));
+
+        test_scenario::next_tx(&mut scenario, SELLER);
         let (seller_kiosk, seller_cap) = kiosk::new(ctx(&mut scenario));
 
         // 4. Add NFT to Seller Kiosk
@@ -290,6 +295,7 @@ module liquidity_layer::test_orderbook {
         ob_kiosk::install_extension(&mut seller_kiosk, seller_cap, ctx(&mut scenario));
         ob_kiosk::register_nft<Foo>(&mut seller_kiosk, nft_id, ctx(&mut scenario));
 
+        // 6. Create ask for NFT
         let book = test_scenario::take_shared<Orderbook<Foo, SUI>>(&mut scenario);
 
         orderbook::create_ask(
@@ -336,11 +342,11 @@ module liquidity_layer::test_orderbook {
         ob_kiosk::uninstall_extension(&mut seller_kiosk, seller_token, ctx(&mut scenario));
 
         coin::burn_for_testing(coin);
-        transfer::public_transfer(publisher, BUYER);
+        transfer::public_transfer(publisher, CREATOR);
         transfer::public_transfer(policy_cap, CREATOR);
-        test_scenario::return_shared(tx_policy);
-        test_scenario::return_shared(seller_kiosk);
-        test_scenario::return_shared(buyer_kiosk);
+        transfer::public_transfer(tx_policy, CREATOR);
+        transfer::public_transfer(seller_kiosk, CREATOR);
+        transfer::public_transfer(buyer_kiosk, CREATOR);
         test_scenario::return_shared(book);
         test_scenario::end(scenario);
     }
@@ -350,7 +356,6 @@ module liquidity_layer::test_orderbook {
         let scenario = test_scenario::begin(CREATOR);
 
         // 1. Create Collection, TransferPolicy and Orderbook
-        
         let publisher = package::test_claim(Witness {}, ctx(&mut scenario));
         let (tx_policy, policy_cap) = transfer_request::init_policy<Foo>(&publisher, ctx(&mut scenario));
 
@@ -443,7 +448,6 @@ module liquidity_layer::test_orderbook {
         let scenario = test_scenario::begin(CREATOR);
 
         // 1. Create Collection, TransferPolicy and Orderbook
-        
         let publisher = package::test_claim(Witness {}, ctx(&mut scenario));
         let (tx_policy, policy_cap) = transfer_request::init_policy<Foo>(&publisher, ctx(&mut scenario));
 
