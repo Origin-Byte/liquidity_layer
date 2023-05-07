@@ -2,12 +2,12 @@
     <h1><img src="./assets/logo.svg" alt="OriginByte" width="50%"></h1>
 </a>
 
+Origin-Byte is an ecosystem of tools, standards, and smart contracts designed to make life easier for Web3 Game Developers and NFT creators.
+From simple artwork to complex gaming assets, we want to help you reach the public, and provide on-chain market infrastructure.
+
 # LiquidityLayer
 
 The NFT Liquidity Layer is a protocol and ecosystem designed to share liquidity and power market-based features for institutional and retail users alike. Contract implements a central limit orderbook and auction markets to aggregate NFT trading into a single point, across the entire chain.
-
-Origin-Byte is an ecosystem of tools, standards, and smart contracts designed to make life easier for Web3 Game Developers and NFT creators.
-From simple artwork to complex gaming assets, we want to help you reach the public, and provide on-chain market infrastructure.
 
 ## Resources
 
