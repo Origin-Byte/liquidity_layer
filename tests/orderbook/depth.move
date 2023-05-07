@@ -39,8 +39,8 @@ module liquidity_layer::test_orderbook_depth {
         let dw = witness::from_witness(Witness {});
     
         let ob = orderbook::new_unprotected<Foo, SUI>(dw, policy, ctx);
-        orderbook::change_tick_size(dw, &mut ob, 1);
-        orderbook::share(ob);
+        orderbook::change_tick_size_with_witness(dw, &mut ob, 1);
+        transfer::public_share_object(ob);
     }
 
     #[test]

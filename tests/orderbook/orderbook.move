@@ -42,8 +42,8 @@ module liquidity_layer::test_orderbook {
         let dw = witness::from_witness(Witness {});
     
         let ob = orderbook::new_unprotected<Foo, SUI>(dw, policy, ctx);
-        orderbook::change_tick_size(dw, &mut ob, 1);
-        orderbook::share(ob);
+        orderbook::change_tick_size_with_witness(dw, &mut ob, 1);
+        transfer::public_share_object(ob);
     }
 
     #[test]
@@ -97,12 +97,12 @@ module liquidity_layer::test_orderbook {
         // to OriginByte, in other words, if the creator did not use OriginByte
         // transfer_request module to initiate the policy or never added OriginByte
         // rules to the policy.
-        orderbook::create_for_external<Foo, SUI>(
+        orderbook::init_external<Foo, SUI>(
             &transfer_policy, ctx(&mut scenario),
         );
 
         // When this is the case, anyone can come in a create an orderbook
-        orderbook::create_for_external<Foo, SUI>(
+        orderbook::init_external<Foo, SUI>(
             &transfer_policy, ctx(&mut scenario),
         );
 
@@ -122,7 +122,7 @@ module liquidity_layer::test_orderbook {
         let (transfer_policy, policy_cap) = transfer_request::init_policy<Foo>(&publisher, ctx(&mut scenario));
 
         // When this is the case, anyone can come in a create an orderbook
-        orderbook::create_for_external<Foo, SUI>(
+        orderbook::init_external<Foo, SUI>(
             &transfer_policy, ctx(&mut scenario),
         );
 
@@ -209,7 +209,7 @@ module liquidity_layer::test_orderbook {
         let publisher = package::test_claim(Witness {}, ctx(&mut scenario));
         let (tx_policy, policy_cap) = transfer_policy::new<Foo>(&publisher, ctx(&mut scenario));
 
-        orderbook::create_for_external<Foo, SUI>(&tx_policy, ctx(&mut scenario));
+        orderbook::init_external<Foo, SUI>(&tx_policy, ctx(&mut scenario));
 
         // 2. Create Kiosks
         let (buyer_kiosk, _) = ob_kiosk::new_for_address(BUYER, ctx(&mut scenario));
@@ -278,7 +278,7 @@ module liquidity_layer::test_orderbook {
         let publisher = package::test_claim(Witness {}, ctx(&mut scenario));
         let (tx_policy, policy_cap) = transfer_policy::new<Foo>(&publisher, ctx(&mut scenario));
 
-        orderbook::create_for_external<Foo, SUI>(&tx_policy, ctx(&mut scenario));
+        orderbook::init_external<Foo, SUI>(&tx_policy, ctx(&mut scenario));
 
         // 2. Create Kiosks
         test_scenario::next_tx(&mut scenario, BUYER);

@@ -31,11 +31,11 @@ module liquidity_layer::orderbook {
     use sui::coin::{Self, Coin};
     use sui::kiosk::{Self, Kiosk};
     use sui::object::{Self, ID, UID};
-    use sui::transfer::share_object;
+    use sui::transfer;
     use sui::tx_context::{Self, TxContext};
     use sui::dynamic_field as df;
 
-    use ob_permissions::witness::Witness as DelegatedWitness;
+    use ob_permissions::witness::{Self, Witness as DelegatedWitness};
     use ob_kiosk::ob_kiosk;
     use ob_request::transfer_request::{Self, TransferRequest};
 
@@ -103,7 +103,7 @@ module liquidity_layer::orderbook {
     /// A critbit order book implementation. Contains two ordered trees:
     /// 1. bids ASC
     /// 2. asks DESC
-    struct Orderbook<phantom T: key + store, phantom FT> has key {
+    struct Orderbook<phantom T: key + store, phantom FT> has key, store {
         id: UID,
         version: u64,
         tick_size: u64,
@@ -278,6 +278,210 @@ module liquidity_layer::orderbook {
         trade_intermediate: Option<ID>,
         nft_type: String,
         ft_type: String,
+    }
+
+    /// Create a new `Orderbook<T, FT>`
+    ///
+    /// To implement specific logic in your smart contract, you can toggle the
+    /// protection on specific actions. That will make them only accessible via
+    /// witness protected methods.
+    /// 
+    /// #### Panics
+    /// 
+    /// Panics if `TransferPolicy<T>` is not an OriginByte policy.
+    public fun new<T: key + store, FT>(
+        _witness: DelegatedWitness<T>,
+        transfer_policy: &TransferPolicy<T>,
+        buy_nft: bool,
+        create_ask: bool,
+        create_bid: bool,
+        ctx: &mut TxContext,
+    ): Orderbook<T, FT> {
+        assert!(
+            transfer_request::is_originbyte(transfer_policy),
+            ENotOriginBytePolicy,
+        );
+
+        new_(WitnessProtectedActions { buy_nft, create_ask, create_bid }, ctx)
+    }
+
+    /// Create an unprotected new `Orderbook<T, FT>`
+    ///
+    /// To implement specific logic in your smart contract, you can toggle the
+    /// protection on specific actions. That will make them only accessible via
+    /// witness protected methods.
+    /// 
+    /// #### Panics
+    /// 
+    /// Panics if `TransferPolicy<T>` is not an OriginByte policy.
+    public fun new_unprotected<T: key + store, FT>(
+        witness: DelegatedWitness<T>,
+        transfer_policy: &TransferPolicy<T>,
+        ctx: &mut TxContext
+    ): Orderbook<T, FT> {
+        new<T, FT>(witness, transfer_policy, false, false, false, ctx)
+    }
+
+    /// Create a new `Orderbook<T, FT>` and immediately share it, returning 
+    /// it's ID
+    /// 
+    /// #### Panics
+    /// 
+    /// Panics if `TransferPolicy<T>` is not an OriginByte policy.
+    public fun create<T: key + store, FT>(
+        witness: DelegatedWitness<T>,
+        transfer_policy: &TransferPolicy<T>,
+        buy_nft: bool,
+        create_ask: bool,
+        create_bid: bool,
+        ctx: &mut TxContext,
+    ): ID {
+        let orderbook = new<T, FT>(
+            witness, transfer_policy, buy_nft, create_ask, create_bid, ctx,
+        );
+        let orderbook_id = object::id(&orderbook);
+        transfer::share_object(orderbook);
+        orderbook_id
+    }
+
+    /// Create a new unprotected `Orderbook<T, FT>` and immediately share it
+    /// returning it's ID
+    /// 
+    /// #### Panics
+    /// 
+    /// Panics if `TransferPolicy<T>` is not an OriginByte policy.
+    public fun create_unprotected<T: key + store, FT>(
+        witness: DelegatedWitness<T>,
+        transfer_policy: &TransferPolicy<T>,
+        ctx: &mut TxContext
+    ): ID {
+        create<T, FT>(witness, transfer_policy, false, false, false, ctx)
+    }
+
+    /// Create a new `Orderbook<T, FT>` and immediately share it
+    /// 
+    /// #### Panics
+    /// 
+    /// Panics if `TransferPolicy<T>` is not an OriginByte policy.
+    public entry fun init_orderbook<T: key + store, FT>(
+        publisher: &Publisher,
+        transfer_policy: &TransferPolicy<T>,
+        buy_nft: bool,
+        create_ask: bool,
+        create_bid: bool,
+        ctx: &mut TxContext,
+    ) {
+        create<T, FT>(
+            witness::from_publisher(publisher),
+            transfer_policy,
+            buy_nft,
+            create_ask,
+            create_bid,
+            ctx,
+        );
+    }
+
+    /// Create a new unprotected `Orderbook<T, FT>` and immediately share it
+    /// 
+    /// #### Panics
+    /// 
+    /// Panics if `TransferPolicy<T>` is not an OriginByte policy.
+    public entry fun init_unprotected_orderbook<T: key + store, FT>(
+        publisher: &Publisher,
+        transfer_policy: &TransferPolicy<T>,
+        ctx: &mut TxContext
+    ) {
+        create_unprotected<T, FT>(
+            witness::from_publisher(publisher), transfer_policy, ctx,
+        );
+    }
+
+    /// Create a new `Orderbook<T, FT>` for external `TransferPolicy`
+    ///
+    /// To implement specific logic in your smart contract, you can toggle the
+    /// protection on specific actions. That will make them only accessible via
+    /// witness protected methods.
+    /// 
+    /// #### Panics
+    /// 
+    /// Panics if `TransferPolicy<T>` is an OriginByte policy.
+    public fun new_external<T: key + store, FT>(
+        transfer_policy: &TransferPolicy<T>,
+        ctx: &mut TxContext
+    ): Orderbook<T, FT> {
+        assert!(
+            !transfer_request::is_originbyte(transfer_policy),
+            ENotExternalPolicy,
+        );
+
+        new_<T, FT>(
+            WitnessProtectedActions {
+                buy_nft: false,
+                create_ask: false,
+                create_bid: false,
+            },
+            ctx,
+        )
+    }
+
+    /// Create a new `Orderbook<T, FT>` for external `TransferPolicy` and
+    /// immediately share it returning its ID
+    ///
+    /// To implement specific logic in your smart contract, you can toggle the
+    /// protection on specific actions. That will make them only accessible via
+    /// witness protected methods.
+    /// 
+    /// #### Panics
+    /// 
+    /// Panics if `TransferPolicy<T>` is an OriginByte policy.
+    public fun create_external<T: key + store, FT>(
+        transfer_policy: &TransferPolicy<T>,
+        ctx: &mut TxContext
+    ): ID {
+        let orderbook = new_external<T, FT>(transfer_policy, ctx);
+        let orderbook_id = object::id(&orderbook);
+        transfer::share_object(orderbook);
+        orderbook_id
+    }
+
+    /// Create a new `Orderbook<T, FT>` for external `TransferPolicy` and
+    /// immediately share it
+    ///
+    /// To implement specific logic in your smart contract, you can toggle the
+    /// protection on specific actions. That will make them only accessible via
+    /// witness protected methods.
+    /// 
+    /// #### Panics
+    /// 
+    /// Panics if `TransferPolicy<T>` is an OriginByte policy.
+    public entry fun init_external<T: key + store, FT>(
+        transfer_policy: &TransferPolicy<T>,
+        ctx: &mut TxContext
+    ) {
+        create_external<T, FT>(transfer_policy, ctx);
+    }
+
+    /// Create a new `Orderbook<T, FT>`
+    fun new_<T: key + store, FT>(
+        protected_actions: WitnessProtectedActions,
+        ctx: &mut TxContext,
+    ): Orderbook<T, FT> {
+        let id = object::new(ctx);
+
+        event::emit(OrderbookCreatedEvent {
+            orderbook: object::uid_to_inner(&id),
+            nft_type: type_name::into_string(type_name::get<T>()),
+            ft_type: type_name::into_string(type_name::get<FT>()),
+        });
+
+        Orderbook<T, FT> {
+            id,
+            version: VERSION,
+            tick_size: DEFAULT_TICK_SIZE,
+            protected_actions,
+            asks: critbit::new(ctx),
+            bids: critbit::new(ctx),
+        }
     }
 
     // === Create bid ===
@@ -683,167 +887,148 @@ module liquidity_layer::orderbook {
         }
     }
 
-    // === Create orderbook ===
+    // === Manage orderbook ===
 
-    /// NFTs of type `T` to be traded, and `F`ungible `T`oken to be
-    /// quoted for an NFT in such a collection.
-    ///
-    /// By default, an orderbook has no restriction on actions, ie. all can be
-    /// called with public functions.
-    ///
-    /// To implement specific logic in your smart contract, you can toggle the
-    /// protection on specific actions. That will make them only accessible via
-    /// witness protected methods.
-    public fun new<T: key + store, FT>(
-        _witness: DelegatedWitness<T>,
-        transfer_policy: &TransferPolicy<T>,
-        protected_actions: WitnessProtectedActions,
-        ctx: &mut TxContext,
-    ): Orderbook<T, FT> {
-        assert!(transfer_request::is_originbyte(transfer_policy), ENotOriginBytePolicy);
-
-        new_(protected_actions, ctx)
-    }
-
-    /// Returns a new orderbook without any protection, ie. all endpoints can
-    /// be called as entry points.
-    public fun new_unprotected<T: key + store, FT>(
-        witness: DelegatedWitness<T>,
-        transfer_policy: &TransferPolicy<T>,
-        ctx: &mut TxContext
-    ): Orderbook<T, FT> {
-        new<T, FT>(witness, transfer_policy, no_protection(), ctx)
-    }
-
-    public fun new_with_protected_actions<T: key + store, FT>(
-        witness: DelegatedWitness<T>,
-        transfer_policy: &TransferPolicy<T>,
-        protected_actions: WitnessProtectedActions,
-        ctx: &mut TxContext,
-    ): Orderbook<T, FT> {
-        new<T, FT>(witness, transfer_policy, protected_actions, ctx)
-    }
-
-    /// Creates a new empty orderbook as a shared object.
-    ///
-    /// All actions can be called as entry points.
-    public fun create_unprotected<T: key + store, FT>(
-        witness: DelegatedWitness<T>,
-        transfer_policy: &TransferPolicy<T>,
-        ctx: &mut TxContext
-    ): ID {
-        let ob = new<T, FT>(witness, transfer_policy, no_protection(), ctx);
-        let ob_id = object::id(&ob);
-        share_object(ob);
-        ob_id
-    }
-
-    public fun create_for_external<T: key + store, FT>(
-        transfer_policy: &TransferPolicy<T>,
-        ctx: &mut TxContext
-    ): ID {
-        assert!(!transfer_request::is_originbyte(transfer_policy), ENotExternalPolicy);
-        let ob = new_<T, FT>(no_protection(), ctx);
-        let ob_id = object::id(&ob);
-        share_object(ob);
-        ob_id
-    }
-
-    public fun change_tick_size<T: key + store, FT>(
-        _witness: DelegatedWitness<T>,
-        book: &mut Orderbook<T, FT>,
-        new_tick: u64,
+    /// Change tick size of orderbook
+    /// 
+    /// #### Panics
+    /// 
+    /// Panics if provided `Publisher` did not publish type `T`
+    public entry fun change_tick_size<T: key + store, FT>(
+        publisher: &Publisher,
+        orderbook: &mut Orderbook<T, FT>,
+        tick_size: u64,
     ) {
-        assert!(new_tick < book.tick_size, 0);
-        book.tick_size = new_tick;
+        change_tick_size_with_witness(
+            witness::from_publisher(publisher), orderbook, tick_size,
+        )
     }
 
-    fun new_<T: key + store, FT>(
-        protected_actions: WitnessProtectedActions,
-        ctx: &mut TxContext,
-    ): Orderbook<T, FT> {
-        let id = object::new(ctx);
-
-        event::emit(OrderbookCreatedEvent {
-            orderbook: object::uid_to_inner(&id),
-            nft_type: type_name::into_string(type_name::get<T>()),
-            ft_type: type_name::into_string(type_name::get<FT>()),
-        });
-
-        Orderbook<T, FT> {
-            id,
-            version: VERSION,
-            tick_size: DEFAULT_TICK_SIZE,
-            protected_actions,
-            asks: critbit::new(ctx),
-            bids: critbit::new(ctx),
-        }
+    /// Change tick size of orderbook
+    public fun change_tick_size_with_witness<T: key + store, FT>(
+        _witness: DelegatedWitness<T>,
+        orderbook: &mut Orderbook<T, FT>,
+        tick_size: u64,
+    ) {
+        assert!(tick_size < orderbook.tick_size, 0);
+        orderbook.tick_size = tick_size;
     }
-
-    public fun share<T: key + store, FT>(ob: Orderbook<T, FT>) {
-        share_object(ob);
-    }
-
-    /// Settings where all endpoints can be called as entry point functions.
-    public fun no_protection(): WitnessProtectedActions {
-        custom_protection(false, false, false)
-    }
-
-    /// Select which actions are witness protected (true).
-    public fun custom_protection(
+    
+    /// Change protection level of an existing orderbook
+    /// 
+    /// #### Panics
+    /// 
+    /// Panics if provided `Publisher` did not publish type `T`
+    public entry fun set_protection<T: key + store, FT>(
+        publisher: &Publisher,
+        orderbook: &mut Orderbook<T, FT>,
         buy_nft: bool,
         create_ask: bool,
         create_bid: bool,
-    ): WitnessProtectedActions {
-        WitnessProtectedActions {
+    ) {
+        set_protection_with_witness<T, FT>(
+            witness::from_publisher(publisher),
+            orderbook,
             buy_nft,
             create_ask,
             create_bid,
-        }
+        )
     }
 
-    /// Change protection level of an existing orderbook.
-    public fun set_protection<T: key + store, FT>(
+    /// Change protection level of an existing orderbook
+    public fun set_protection_with_witness<T: key + store, FT>(
         _witness: DelegatedWitness<T>,
-        ob: &mut Orderbook<T, FT>,
-        protected_actions: WitnessProtectedActions,
+        orderbook: &mut Orderbook<T, FT>,
+        buy_nft: bool,
+        create_ask: bool,
+        create_bid: bool,
     ) {
-        ob.protected_actions = protected_actions;
+        orderbook.protected_actions = WitnessProtectedActions {
+            buy_nft, create_ask, create_bid,
+        };
+    }
+
+    /// Helper method to protect all endpoints thus disabling trading
+    /// 
+    /// #### Panics
+    /// 
+    /// Panics if provided `Publisher` did not publish type `T`
+    public entry fun disable_trading<T: key + store, FT>(
+        publisher: &Publisher,
+        orderbook: &mut Orderbook<T, FT>,
+    ) {
+        set_protection_with_witness<T, FT>(
+            witness::from_publisher(publisher), orderbook, true, true, true,
+        )
+    }
+
+    /// Helper method to unprotect all endpoints thus enabling trading
+    /// 
+    /// #### Panics
+    /// 
+    /// Panics if provided `Publisher` did not publish type `T`
+    public entry fun enable_trading<T: key + store, FT>(
+        publisher: &Publisher,
+        orderbook: &mut Orderbook<T, FT>,
+    ) {
+        set_protection_with_witness<T, FT>(
+            witness::from_publisher(publisher), orderbook, false, false, false,
+        )
     }
 
     // === Getters ===
 
     public fun borrow_bids<T: key + store, FT>(
         book: &Orderbook<T, FT>,
-    ): &CritbitTree<vector<Bid<FT>>> { &book.bids }
+    ): &CritbitTree<vector<Bid<FT>>> {
+        &book.bids
+    }
 
-    public fun bid_offer<FT>(bid: &Bid<FT>): &Balance<FT> { &bid.offer }
+    public fun bid_offer<FT>(bid: &Bid<FT>): &Balance<FT> {
+        &bid.offer
+    }
 
-    public fun bid_owner<FT>(bid: &Bid<FT>): address { bid.owner }
+    public fun bid_owner<FT>(bid: &Bid<FT>): address {
+        bid.owner
+    }
 
     public fun borrow_asks<T: key + store, FT>(
         book: &Orderbook<T, FT>,
-    ): &CritbitTree<vector<Ask>> { &book.asks }
+    ): &CritbitTree<vector<Ask>> {
+        &book.asks
+    }
 
-    public fun ask_price(ask: &Ask): u64 { ask.price }
+    public fun ask_price(ask: &Ask): u64 {
+        ask.price
+    }
 
-    public fun ask_owner(ask: &Ask): address { ask.owner }
+    public fun ask_owner(ask: &Ask): address {
+        ask.owner
+    }
 
     public fun protected_actions<T: key + store, FT>(
         book: &Orderbook<T, FT>,
-    ): &WitnessProtectedActions { &book.protected_actions }
+    ): &WitnessProtectedActions {
+        &book.protected_actions
+    }
 
     public fun is_create_ask_protected(
         protected_actions: &WitnessProtectedActions
-    ): bool { protected_actions.create_ask }
+    ): bool {
+        protected_actions.create_ask
+    }
 
     public fun is_create_bid_protected(
         protected_actions: &WitnessProtectedActions
-    ): bool { protected_actions.create_bid }
+    ): bool {
+        protected_actions.create_bid
+    }
 
     public fun is_buy_nft_protected(
         protected_actions: &WitnessProtectedActions
-    ): bool { protected_actions.buy_nft }
+    ): bool {
+        protected_actions.buy_nft
+    }
 
     public fun trade_id(trade: &TradeInfo): ID {
         trade.trade_id
@@ -853,10 +1038,11 @@ module liquidity_layer::orderbook {
         trade.trade_price
     }
 
-    public fun trade<T: key + store, FT>(book: &Orderbook<T, FT>, trade_id: ID): &TradeIntermediate<T, FT> {
-        df::borrow(
-            &book.id, TradeIntermediateDfKey<T, FT> { trade_id }
-        )
+    public fun trade<T: key + store, FT>(
+        book: &Orderbook<T, FT>,
+        trade_id: ID,
+    ): &TradeIntermediate<T, FT> {
+        df::borrow(&book.id, TradeIntermediateDfKey<T, FT> { trade_id })
     }
 
     // === Priv fns ===
@@ -1465,14 +1651,16 @@ module liquidity_layer::orderbook {
 
     // Only the publisher of type `T` can upgrade
     entry fun migrate_as_creator<T: key + store, FT>(
-        self: &mut Orderbook<T, FT>, pub: &Publisher
+        self: &mut Orderbook<T, FT>,
+        pub: &Publisher,
     ) {
         assert!(package::from_package<T>(pub), 0);
         self.version = VERSION;
     }
 
     entry fun migrate_as_pub<T: key + store, FT>(
-        self: &mut Orderbook<T, FT>, pub: &Publisher
+        self: &mut Orderbook<T, FT>,
+        pub: &Publisher,
     ) {
         assert!(package::from_package<LIQUIDITY_LAYER>(pub), 0);
         self.version = VERSION;
