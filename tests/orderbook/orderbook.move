@@ -19,11 +19,12 @@ module liquidity_layer::test_orderbook {
     // fun it_fails_if_buyer_safe_eq_seller_safe_with_generic_collection()
     // fun it_fails_if_buyer_safe_eq_seller_safe_with_generic_collection() {
     use ob_permissions::witness;
-    use originmate::crit_bit_u64::{Self as crit_bit};
     use ob_request::transfer_request;
     use ob_kiosk::ob_kiosk::{Self, OwnerToken};
 
     use liquidity_layer::orderbook::{Self, Orderbook};
+
+    use critbit::critbit_u64 as critbit;
 
     const OFFER_SUI: u64 = 100;
 
@@ -41,8 +42,8 @@ module liquidity_layer::test_orderbook {
         let dw = witness::from_witness(Witness {});
     
         let ob = orderbook::new_unprotected<Foo, SUI>(dw, policy, ctx);
-        orderbook::change_tick_size(dw, &mut ob, 1);
-        orderbook::share(ob);
+        orderbook::change_tick_size_with_witness(dw, &mut ob, 1);
+        transfer::public_share_object(ob);
     }
 
     #[test]
@@ -96,12 +97,12 @@ module liquidity_layer::test_orderbook {
         // to OriginByte, in other words, if the creator did not use OriginByte
         // transfer_request module to initiate the policy or never added OriginByte
         // rules to the policy.
-        orderbook::create_for_external<Foo, SUI>(
+        orderbook::init_external<Foo, SUI>(
             &transfer_policy, ctx(&mut scenario),
         );
 
         // When this is the case, anyone can come in a create an orderbook
-        orderbook::create_for_external<Foo, SUI>(
+        orderbook::init_external<Foo, SUI>(
             &transfer_policy, ctx(&mut scenario),
         );
 
@@ -121,7 +122,7 @@ module liquidity_layer::test_orderbook {
         let (transfer_policy, policy_cap) = transfer_request::init_policy<Foo>(&publisher, ctx(&mut scenario));
 
         // When this is the case, anyone can come in a create an orderbook
-        orderbook::create_for_external<Foo, SUI>(
+        orderbook::init_external<Foo, SUI>(
             &transfer_policy, ctx(&mut scenario),
         );
 
@@ -208,7 +209,7 @@ module liquidity_layer::test_orderbook {
         let publisher = package::test_claim(Witness {}, ctx(&mut scenario));
         let (tx_policy, policy_cap) = transfer_policy::new<Foo>(&publisher, ctx(&mut scenario));
 
-        orderbook::create_for_external<Foo, SUI>(&tx_policy, ctx(&mut scenario));
+        orderbook::init_external<Foo, SUI>(&tx_policy, ctx(&mut scenario));
 
         // 2. Create Kiosks
         let (buyer_kiosk, _) = ob_kiosk::new_for_address(BUYER, ctx(&mut scenario));
@@ -277,7 +278,7 @@ module liquidity_layer::test_orderbook {
         let publisher = package::test_claim(Witness {}, ctx(&mut scenario));
         let (tx_policy, policy_cap) = transfer_policy::new<Foo>(&publisher, ctx(&mut scenario));
 
-        orderbook::create_for_external<Foo, SUI>(&tx_policy, ctx(&mut scenario));
+        orderbook::init_external<Foo, SUI>(&tx_policy, ctx(&mut scenario));
 
         // 2. Create Kiosks
         test_scenario::next_tx(&mut scenario, BUYER);
@@ -370,7 +371,7 @@ module liquidity_layer::test_orderbook {
     
         let book = test_scenario::take_shared<Orderbook<Foo, SUI>>(&mut scenario);
 
-        let price_levels = crit_bit::length(orderbook::borrow_asks(&book));
+        let price_levels = critbit::size(orderbook::borrow_asks(&book));
 
         let quantity = 300;
         let i = quantity;
@@ -398,7 +399,7 @@ module liquidity_layer::test_orderbook {
 
             // 2. New price level gets added with new Ask
             price_levels = price_levels + 1;
-            assert!(crit_bit::length(orderbook::borrow_asks(&book)) == price_levels, 0);
+            assert!(critbit::size(orderbook::borrow_asks(&book)) == price_levels, 0);
 
             i = i - 1;
             price = price + 1;
@@ -430,8 +431,8 @@ module liquidity_layer::test_orderbook {
         };
 
         // Assert that orderbook is empty
-        assert!(crit_bit::is_empty(orderbook::borrow_bids(&book)), 0);
-        assert!(crit_bit::is_empty(orderbook::borrow_asks(&book)), 0);
+        assert!(critbit::is_empty(orderbook::borrow_bids(&book)), 0);
+        assert!(critbit::is_empty(orderbook::borrow_asks(&book)), 0);
 
         coin::burn_for_testing(coin);
         transfer::public_transfer(publisher, CREATOR);
@@ -463,7 +464,7 @@ module liquidity_layer::test_orderbook {
         let book = test_scenario::take_shared<Orderbook<Foo, SUI>>(&mut scenario);
 
         let initial_funds = 1_000_000;
-        let price_levels = crit_bit::length(orderbook::borrow_bids(&book));
+        let price_levels = critbit::size(orderbook::borrow_bids(&book));
         let funds_locked = 0;
 
         let coin = coin::mint_for_testing<SUI>(initial_funds, ctx(&mut scenario));
@@ -492,7 +493,7 @@ module liquidity_layer::test_orderbook {
 
             // 2. New price level gets added with new Bid
             price_levels = price_levels + 1;
-            assert!(crit_bit::length(orderbook::borrow_bids(&book)) == price_levels, 0);
+            assert!(critbit::size(orderbook::borrow_bids(&book)) == price_levels, 0);
 
             price = price + 1;
             i = i - 1;
@@ -529,8 +530,8 @@ module liquidity_layer::test_orderbook {
         };
 
         // Assert that orderbook is empty
-        assert!(crit_bit::is_empty(orderbook::borrow_bids(&book)), 0);
-        assert!(crit_bit::is_empty(orderbook::borrow_asks(&book)), 0);
+        assert!(critbit::is_empty(orderbook::borrow_bids(&book)), 0);
+        assert!(critbit::is_empty(orderbook::borrow_asks(&book)), 0);
 
         coin::burn_for_testing(coin);
         transfer::public_transfer(publisher, CREATOR);
@@ -561,7 +562,7 @@ module liquidity_layer::test_orderbook {
     
         let book = test_scenario::take_shared<Orderbook<Foo, SUI>>(&mut scenario);
 
-        let price_levels = crit_bit::length(orderbook::borrow_asks(&book));
+        let price_levels = critbit::size(orderbook::borrow_asks(&book));
 
         let quantity = 300;
         let i = quantity;
@@ -589,7 +590,7 @@ module liquidity_layer::test_orderbook {
 
             // 2. New price level gets added with new Ask
             price_levels = price_levels + 1;
-            assert!(crit_bit::length(orderbook::borrow_asks(&book)) == price_levels, 0);
+            assert!(critbit::size(orderbook::borrow_asks(&book)) == price_levels, 0);
 
             i = i - 1;
             price = price + 1;
@@ -626,7 +627,7 @@ module liquidity_layer::test_orderbook {
 
             // 2. Ask gets popped and price level removed
             price_levels = price_levels - 1;
-            assert!(crit_bit::length(orderbook::borrow_asks(&book)) == price_levels, 0);
+            assert!(critbit::size(orderbook::borrow_asks(&book)) == price_levels, 0);
 
             // 3. Assert trade match
             let trade_info = option::extract(&mut trade_info_opt);
@@ -638,8 +639,8 @@ module liquidity_layer::test_orderbook {
         };
 
         // Assert that orderbook is empty
-        assert!(crit_bit::is_empty(orderbook::borrow_bids(&book)), 0);
-        assert!(crit_bit::is_empty(orderbook::borrow_asks(&book)), 0);
+        assert!(critbit::is_empty(orderbook::borrow_bids(&book)), 0);
+        assert!(critbit::is_empty(orderbook::borrow_asks(&book)), 0);
 
         coin::burn_for_testing(coin);
         transfer::public_transfer(publisher, CREATOR);
@@ -671,7 +672,7 @@ module liquidity_layer::test_orderbook {
         let book = test_scenario::take_shared<Orderbook<Foo, SUI>>(&mut scenario);
 
         let initial_funds = 1_000_000;
-        let bid_price_levels = crit_bit::length(orderbook::borrow_bids(&book));
+        let bid_price_levels = critbit::size(orderbook::borrow_bids(&book));
         let funds_locked = 0;
 
         let coin = coin::mint_for_testing<SUI>(1_000_000, ctx(&mut scenario));
@@ -700,7 +701,7 @@ module liquidity_layer::test_orderbook {
 
             // 2. New price level gets added with new Bid
             bid_price_levels = bid_price_levels + 1;
-            assert!(crit_bit::length(orderbook::borrow_bids(&book)) == bid_price_levels, 0);
+            assert!(critbit::size(orderbook::borrow_bids(&book)) == bid_price_levels, 0);
 
             price = price + 1;
             i = i - 1;
@@ -709,7 +710,7 @@ module liquidity_layer::test_orderbook {
         test_scenario::next_tx(&mut scenario, BUYER);
 
         // Seller gets best price (highest)
-        let ask_price_levels = crit_bit::length(orderbook::borrow_asks(&book));
+        let ask_price_levels = critbit::size(orderbook::borrow_asks(&book));
         let price = 301;
         let i = quantity;
 
@@ -737,17 +738,22 @@ module liquidity_layer::test_orderbook {
 
             // 2. New price level gets added with new Ask
             ask_price_levels = ask_price_levels + 1;
-            assert!(crit_bit::length(orderbook::borrow_asks(&book)) == ask_price_levels, 0);
+            assert!(critbit::size(orderbook::borrow_asks(&book)) == ask_price_levels, 0);
 
             i = i - 1;
             price = price + 1;
         };
 
         // Assert orderbook state
-        assert!(crit_bit::max_key(orderbook::borrow_bids(&book)) == 300, 0);
-        assert!(crit_bit::min_key(orderbook::borrow_bids(&book)) == 1, 0);
-        assert!(crit_bit::max_key(orderbook::borrow_asks(&book)) == 600, 0);
-        assert!(crit_bit::min_key(orderbook::borrow_asks(&book)) == 301, 0);
+        let (max_key, _) = critbit::max_leaf(orderbook::borrow_bids(&book));
+        assert!(max_key == 300, 0);
+        let (min_key, _) = critbit::min_leaf(orderbook::borrow_bids(&book));
+        assert!(min_key == 1, 0);
+
+        let (max_key, _) = critbit::max_leaf(orderbook::borrow_asks(&book));
+        assert!(max_key == 600, 0);
+        let (min_key, _) = critbit::min_leaf(orderbook::borrow_asks(&book));
+        assert!(min_key == 301, 0);
 
         coin::burn_for_testing(coin);
         transfer::public_transfer(publisher, CREATOR);
@@ -809,8 +815,10 @@ module liquidity_layer::test_orderbook {
         };
 
         // Assert that orderbook state
-        assert!(crit_bit::max_key(orderbook::borrow_asks(&book)) == 300, 0);
-        assert!(crit_bit::min_key(orderbook::borrow_asks(&book)) == 1, 0);
+        let (max_key, _) = critbit::max_leaf(orderbook::borrow_asks(&book));
+        assert!(max_key == 300, 0);
+        let (min_key, _) = critbit::min_leaf(orderbook::borrow_asks(&book));
+        assert!(min_key == 1, 0);
 
         let i = quantity;
         let price = 1;
@@ -833,7 +841,7 @@ module liquidity_layer::test_orderbook {
         };
 
         // Assert that orderbook state
-        assert!(crit_bit::is_empty(orderbook::borrow_asks(&book)), 0);
+        assert!(critbit::is_empty(orderbook::borrow_asks(&book)), 0);
 
         coin::burn_for_testing(coin);
         transfer::public_transfer(publisher, CREATOR);
@@ -865,7 +873,7 @@ module liquidity_layer::test_orderbook {
         let book = test_scenario::take_shared<Orderbook<Foo, SUI>>(&mut scenario);
 
         let initial_funds = 1_000_000;
-        let price_levels = crit_bit::length(orderbook::borrow_bids(&book));
+        let price_levels = critbit::size(orderbook::borrow_bids(&book));
         let funds_locked = 0;
 
         let coin = coin::mint_for_testing<SUI>(initial_funds, ctx(&mut scenario));
@@ -894,15 +902,17 @@ module liquidity_layer::test_orderbook {
 
             // 2. New price level gets added with new Bid
             price_levels = price_levels + 1;
-            assert!(crit_bit::length(orderbook::borrow_bids(&book)) == price_levels, 0);
+            assert!(critbit::size(orderbook::borrow_bids(&book)) == price_levels, 0);
 
             price = price + 1;
             i = i - 1;
         };
 
         // Assert that orderbook state
-        assert!(crit_bit::max_key(orderbook::borrow_bids(&book)) == 300, 0);
-        assert!(crit_bit::min_key(orderbook::borrow_bids(&book)) == 1, 0);
+        let (max_key, _) = critbit::max_leaf(orderbook::borrow_bids(&book));
+        assert!(max_key == 300, 0);
+        let (min_key, _) = critbit::min_leaf(orderbook::borrow_bids(&book));
+        assert!(min_key == 1, 0);
 
         let i = quantity;
         let price = 1;
@@ -927,14 +937,14 @@ module liquidity_layer::test_orderbook {
 
             // 2. New price level gets removed with Bid popped
             price_levels = price_levels - 1;
-            assert!(crit_bit::length(orderbook::borrow_bids(&book)) == price_levels, 0);
+            assert!(critbit::size(orderbook::borrow_bids(&book)) == price_levels, 0);
 
             price = price + 1;
             i = i - 1;
         };
 
         // Assert that orderbook state
-        assert!(crit_bit::is_empty(orderbook::borrow_bids(&book)), 0);
+        assert!(critbit::is_empty(orderbook::borrow_bids(&book)), 0);
 
         coin::burn_for_testing(coin);
         transfer::public_transfer(publisher, CREATOR);
@@ -996,9 +1006,12 @@ module liquidity_layer::test_orderbook {
         };
 
         // Assert that orderbook state
-        assert!(crit_bit::max_key(orderbook::borrow_asks(&book)) == 300, 0);
-        assert!(crit_bit::min_key(orderbook::borrow_asks(&book)) == 1, 0);
-        assert!(crit_bit::length(orderbook::borrow_asks(&book)) == 300, 0);
+        assert!(critbit::size(orderbook::borrow_asks(&book)) == 300, 0);
+
+        let (max_key, _) = critbit::max_leaf(orderbook::borrow_asks(&book));
+        assert!(max_key == 300, 0);
+        let (min_key, _) = critbit::min_leaf(orderbook::borrow_asks(&book));
+        assert!(min_key == 1, 0);
 
         let i = quantity;
         let price = 1;
@@ -1023,10 +1036,12 @@ module liquidity_layer::test_orderbook {
 
         // Assert that orderbook state
         // All orders are concentrated into one price level
-        assert!(crit_bit::length(orderbook::borrow_asks(&book)) == 1, 0);
+        assert!(critbit::size(orderbook::borrow_asks(&book)) == 1, 0);
 
-        assert!(crit_bit::max_key(orderbook::borrow_asks(&book)) == 500, 0);
-        assert!(crit_bit::min_key(orderbook::borrow_asks(&book)) == 500, 0);
+        let (max_key, _) = critbit::max_leaf(orderbook::borrow_asks(&book));
+        assert!(max_key == 500, 0);
+        let (min_key, _) = critbit::min_leaf(orderbook::borrow_asks(&book));
+        assert!(min_key == 500, 0);
 
         coin::burn_for_testing(coin);
         transfer::public_transfer(publisher, CREATOR);
@@ -1058,7 +1073,7 @@ module liquidity_layer::test_orderbook {
         let book = test_scenario::take_shared<Orderbook<Foo, SUI>>(&mut scenario);
 
         let initial_funds = 1_000_000;
-        let price_levels = crit_bit::length(orderbook::borrow_bids(&book));
+        let price_levels = critbit::size(orderbook::borrow_bids(&book));
         let funds_locked = 0;
 
         let coin = coin::mint_for_testing<SUI>(initial_funds, ctx(&mut scenario));
@@ -1087,15 +1102,17 @@ module liquidity_layer::test_orderbook {
 
             // 2. New price level gets added with new Bid
             price_levels = price_levels + 1;
-            assert!(crit_bit::length(orderbook::borrow_bids(&book)) == price_levels, 0);
+            assert!(critbit::size(orderbook::borrow_bids(&book)) == price_levels, 0);
 
             price = price + 1;
             i = i - 1;
         };
 
-        // Assert that orderbook state
-        assert!(crit_bit::max_key(orderbook::borrow_bids(&book)) == 300, 0);
-        assert!(crit_bit::min_key(orderbook::borrow_bids(&book)) == 1, 0);
+        // Assert orderbook state
+        let (max_key, _) = critbit::max_leaf(orderbook::borrow_bids(&book));
+        assert!(max_key == 300, 0);
+        let (min_key, _) = critbit::min_leaf(orderbook::borrow_bids(&book));
+        assert!(min_key == 1, 0);
 
         let i = quantity;
         let price = 1;
@@ -1124,7 +1141,7 @@ module liquidity_layer::test_orderbook {
             // price level - In the first iteration the length does not really change because
             // we are just swapping one price level for another.
             price_levels = if (i == quantity) {price_levels} else {price_levels - 1};
-            assert!(crit_bit::length(orderbook::borrow_bids(&book)) == price_levels, 0);
+            assert!(critbit::size(orderbook::borrow_bids(&book)) == price_levels, 0);
 
             price = price + 1;
             i = i - 1;
@@ -1132,10 +1149,12 @@ module liquidity_layer::test_orderbook {
 
         // Assert orderbook state
         // All orders are concentrated into one price level
-        assert!(crit_bit::length(orderbook::borrow_bids(&book)) == 1, 0);
+        assert!(critbit::size(orderbook::borrow_bids(&book)) == 1, 0);
 
-        assert!(crit_bit::max_key(orderbook::borrow_bids(&book)) == 500, 0);
-        assert!(crit_bit::min_key(orderbook::borrow_bids(&book)) == 500, 0);
+        let (max_key, _) = critbit::max_leaf(orderbook::borrow_bids(&book));
+        assert!(max_key == 500, 0);
+        let (min_key, _) = critbit::min_leaf(orderbook::borrow_bids(&book));
+        assert!(min_key == 500, 0);
 
         coin::burn_for_testing(coin);
         transfer::public_transfer(publisher, CREATOR);
