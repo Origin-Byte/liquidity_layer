@@ -42,6 +42,7 @@ module liquidity_layer::orderbook {
 
     use liquidity_layer::trading;
     use liquidity_layer::liquidity_layer::LIQUIDITY_LAYER;
+    use liquidity_layer::fee_balance;
 
     // Track the current version of the module
     const VERSION: u64 = 1;
@@ -1469,11 +1470,6 @@ module liquidity_layer::orderbook {
 
         let bid_offer = balance::split(coin::balance_mut(wallet), price);
 
-        trading::transfer_ask_commission<FT>(
-            &mut maybe_commission, &mut bid_offer, ctx,
-        );
-        option::destroy_none(maybe_commission);
-
         let transfer_req = ob_kiosk::transfer_delegated<T>(
             seller_kiosk,
             buyer_kiosk,
@@ -1482,7 +1478,22 @@ module liquidity_layer::orderbook {
             price,
             ctx,
         );
+
+        if (option::is_some(&maybe_commission)) {
+            let commission = option::extract(&mut maybe_commission);
+
+            let (fee_balance, fee_beneficiary) = trading::extract_ask_commission(
+                commission, &mut bid_offer,
+            );
+
+            fee_balance::set_paid_fee(
+                &mut transfer_req, fee_balance, fee_beneficiary
+            );
+        };
+        
         transfer_request::set_paid<T, FT>(&mut transfer_req, bid_offer, seller);
+
+        option::destroy_none(maybe_commission);
         ob_kiosk::set_transfer_request_auth(&mut transfer_req, &Witness {});
 
         transfer_req
@@ -1496,6 +1507,7 @@ module liquidity_layer::orderbook {
         ctx: &mut TxContext,
     ): TransferRequest<T> {
         assert_version(book);
+
         let trade = df::remove(
             &mut book.id, TradeIntermediateDfKey<T, FT> { trade_id }
         );
@@ -1519,8 +1531,6 @@ module liquidity_layer::orderbook {
             expected_buyer_kiosk_id == object::id(buyer_kiosk), EKioskIdMismatch,
         );
 
-        trading::transfer_ask_commission<FT>(&mut maybe_commission, &mut paid, ctx);
-
         let transfer_req = if (kiosk::is_locked(seller_kiosk, nft_id)) {
             ob_kiosk::transfer_locked_nft<T>(
                 seller_kiosk,
@@ -1540,9 +1550,21 @@ module liquidity_layer::orderbook {
             )
         };
 
-        transfer_request::set_paid<T, FT>(
-            &mut transfer_req, paid, seller,
-        );
+        if (option::is_some(&maybe_commission)) {
+            let commission = option::extract(&mut maybe_commission);
+
+            let (fee_balance, fee_beneficiary) = trading::extract_ask_commission(
+                commission, &mut paid,
+            );
+
+            fee_balance::set_paid_fee(
+                &mut transfer_req, fee_balance, fee_beneficiary
+            );
+        };
+
+        transfer_request::set_paid<T, FT>(&mut transfer_req, paid, seller);
+
+        option::destroy_none(maybe_commission);
         ob_kiosk::set_transfer_request_auth(&mut transfer_req, &Witness {});
 
         transfer_req
